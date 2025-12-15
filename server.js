@@ -10,6 +10,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ------------------------- CORS ------------------------
+app.use(cors({
+  origin: "*" // o usa '*' para desarrollo
+}));
+
+app.use(express.json());
+
 /* --------------------- OAUTH DISCORD --------------------- */
 app.post("/oauth/discord", async (req, res) => {
   try {
