@@ -1,25 +1,23 @@
- import express from "express";
-import fetch from "node-fetch";
+import express from "express";
 import cors from "cors";
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import EmailJS from "@emailjs/nodejs";
+import fetch from "node-fetch";
 
 dotenv.config();
 
 const app = express();
-
-/* ===== MIDDLEWARE ===== */
-app.use(cors({ origin: "*" }));
+app.use(cors());
 app.use(express.json());
+
+const emailJSClient = new EmailJS();
 
 /* ===== DISCORD OAUTH ===== */
 app.post("/oauth/discord", async (req, res) => {
   try {
     const { code } = req.body;
 
-    if (!code) {
-      return res.status(400).json({ error: "Código faltante" });
-    }
+    if (!code) return res.status(400).json({ error: "Código faltante" });
 
     const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
       method: "POST",
@@ -34,15 +32,10 @@ app.post("/oauth/discord", async (req, res) => {
     });
 
     const token = await tokenRes.json();
-
-    if (!token.access_token) {
-      return res.status(400).json({ error: "Token inválido" });
-    }
+    if (!token.access_token) return res.status(400).json({ error: "Token inválido" });
 
     const userRes = await fetch("https://discord.com/api/users/@me", {
-      headers: {
-        Authorization: `Bearer ${token.access_token}`
-      }
+      headers: { Authorization: `Bearer ${token.access_token}` }
     });
 
     const user = await userRes.json();
@@ -58,64 +51,34 @@ app.post("/oauth/discord", async (req, res) => {
   }
 });
 
-/* ===== SEND MAIL (GMAIL SSL 465) ===== */
+/* ===== ENVIAR EMAIL ===== */
 app.post("/send", async (req, res) => {
   try {
-    console.log("BODY RECIBIDO:", req.body);
-
     const { user, nominations } = req.body;
 
-    if (!user || !user.id || !user.username) {
-      return res.status(400).json({ error: "Usuario inválido" });
-    }
+    if (!user || !nominations) return res.status(400).json({ error: "Datos incompletos" });
 
-    if (!nominations || Object.keys(nominations).length === 0) {
-      return res.status(400).json({ error: "Nominaciones vacías" });
-    }
+    const templateParams = {
+      user_id: user.id,
+      username: user.username,
+      nominations: JSON.stringify(nominations, null, 2)
+    };
 
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
-      throw new Error("Variables de Gmail no definidas");
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true, // 🔥 CLAVE PARA RENDER
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS // APP PASSWORD
-      }
-    });
-
-    await transporter.verify(); // fuerza error si no conecta
-
-    await transporter.sendMail({
-      from: `"Awards 2025" <${process.env.GMAIL_USER}>`,
-      to: process.env.GMAIL_USER,
-      subject: "Nueva nominación - AWARDS 2025",
-      html: `
-        <h2>Nueva nominación</h2>
-        <p><b>ID Discord:</b> ${user.id}</p>
-        <p><b>Usuario:</b> ${user.username}</p>
-        <hr>
-        <pre>${JSON.stringify(nominations, null, 2)}</pre>
-      `
-    });
+    await emailJSClient.send(
+      process.env.EMAILJS_SERVICE_ID,
+      process.env.EMAILJS_TEMPLATE_ID,
+      templateParams,
+      process.env.EMAILJS_PUBLIC_KEY
+    );
 
     res.json({ ok: true });
 
   } catch (err) {
-    console.error("MAIL ERROR:", err);
-    res.status(500).json({
-      error: "Error enviando correo",
-      detail: err.message
-    });
+    console.error("EMAILJS ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 /* ===== START SERVER ===== */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Servidor corriendo en puerto", PORT);
-});
- 
+app.listen(PORT, () => console.log("Servidor corriendo en puerto", PORT)); 
