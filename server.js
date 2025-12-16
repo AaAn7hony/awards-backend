@@ -14,6 +14,7 @@ const emailJSClient = new EmailJS();
 
 /* ===== DISCORD OAUTH ===== */
 app.post("/oauth/discord", async (req, res) => {
+  console.log("CODE RECIBIDO: ",req.body.code);
   try {
     const { code } = req.body;
 
@@ -32,6 +33,7 @@ app.post("/oauth/discord", async (req, res) => {
     });
 
     const token = await tokenRes.json();
+    console.log("TOKEN RECIBIDO: ",token)
     if (!token.access_token) return res.status(400).json({ error: "Token inválido" });
 
     const userRes = await fetch("https://discord.com/api/users/@me", {
