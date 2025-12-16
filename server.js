@@ -17,6 +17,10 @@ app.post("/oauth/discord", async (req, res) => {
   try {
     const { code } = req.body;
 
+    if (!code) {
+      return res.status(400).json({ error: "Código faltante" });
+    }
+
     const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -54,29 +58,41 @@ app.post("/oauth/discord", async (req, res) => {
   }
 });
 
-/* ===== SEND MAIL ===== */
+/* ===== SEND MAIL (GMAIL SSL 465) ===== */
 app.post("/send", async (req, res) => {
   try {
+    console.log("BODY RECIBIDO:", req.body);
+
     const { user, nominations } = req.body;
 
-    if (!user || !nominations) {
-      return res.status(400).json({ error: "Datos incompletos" });
+    if (!user || !user.id || !user.username) {
+      return res.status(400).json({ error: "Usuario inválido" });
+    }
+
+    if (!nominations || Object.keys(nominations).length === 0) {
+      return res.status(400).json({ error: "Nominaciones vacías" });
+    }
+
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+      throw new Error("Variables de Gmail no definidas");
     }
 
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true, // 🔥 CLAVE PARA RENDER
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_PASS // APP PASSWORD
       }
     });
 
-    await transporter.verify(); // 🔥 fuerza error si Gmail no acepta login
+    await transporter.verify(); // fuerza error si no conecta
 
     await transporter.sendMail({
       from: `"Awards 2025" <${process.env.GMAIL_USER}>`,
       to: process.env.GMAIL_USER,
-      subject: "Nueva nominación",
+      subject: "Nueva nominación - AWARDS 2025",
       html: `
         <h2>Nueva nominación</h2>
         <p><b>ID Discord:</b> ${user.id}</p>
@@ -90,12 +106,16 @@ app.post("/send", async (req, res) => {
 
   } catch (err) {
     console.error("MAIL ERROR:", err);
-    res.status(500).json({ error: "No se pudo enviar el mail" });
+    res.status(500).json({
+      error: "Error enviando correo",
+      detail: err.message
+    });
   }
 });
 
-/* ===== START ===== */
+/* ===== START SERVER ===== */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Servidor corriendo en puerto", PORT);
 });
+ 
